@@ -277,7 +277,8 @@ end
 
 -- Specializations appeared only in Mists Of Pandaria. We also have make changes to Cataclysm with preferred talent tree
 -- later
-if TOC_VERSION_CURRENT < TOC_VERSION_MOP then
+-- Some pre-MoP clients (e.g. WoW: Forever) use the specialization API instead of talent tabs.
+if TOC_VERSION_CURRENT < TOC_VERSION_MOP and GetTalentTabInfo then
 	function AutoGearDetectSpec()
 		-- GetSpecialization() doesn't exist until MoP
 		-- Instead, this finds the talent tree where the most points are allocated.
@@ -340,9 +341,15 @@ else
 		local currentSpecName = currentSpec and select(2, GetSpecializationInfo(currentSpec)) or "None"
 		if (currentSpec == 5) then
 			return "None"
-		else
-			return currentSpecName
 		end
+		-- Pre-MoP clients with the specialization API report class-wide specs (e.g. "Rogue") that have no weights.
+		if TOC_VERSION_CURRENT < TOC_VERSION_MOP then
+			local classWeights = AutoGearDefaultWeights and AutoGearDefaultWeights[select(2, UnitClass("player"))]
+			if classWeights and not classWeights[currentSpecName] then
+				return "None"
+			end
+		end
+		return currentSpecName
 	end
 end
 

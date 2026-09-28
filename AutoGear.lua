@@ -316,7 +316,7 @@ if TOC_VERSION_CURRENT < TOC_VERSION_MOP then
 		local highestPointsSpent = nil
 		local numTalentTabs = GetNumTalentTabs and GetNumTalentTabs()
 		if (not numTalentTabs) or (numTalentTabs < 2) then
-			AutoGearPrint("AutoGear: numTalentTabs in AutoGearGetSpec() is "..tostring(numTalentTabs),0)
+			AutoGearPrint("AutoGear: numTalentTabs in AutoGearGetSpec() is "..tostring(numTalentTabs),3)
 			-- fall back to probing tabs until one doesn't exist
 			numTalentTabs = 4
 		end

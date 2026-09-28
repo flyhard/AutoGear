@@ -277,35 +277,22 @@ end
 
 -- Specializations appeared only in Mists Of Pandaria. We also have make changes to Cataclysm with preferred talent tree
 -- later
-if TOC_VERSION_CURRENT < TOC_VERSION_MOP then
+-- Some pre-MoP clients (e.g. WoW: Forever) use the specialization API instead of talent tabs.
+if TOC_VERSION_CURRENT < TOC_VERSION_MOP and GetTalentTabInfo then
 	-- Returns the name and points spent of a talent tab, or nil if it doesn't exist.
-	-- Newer Classic clients removed GetTalentTabInfo in favor of C_SpecializationInfo.GetSpecializationInfo.
 	local function AutoGearGetTalentTabInfo(tab)
-		if GetTalentTabInfo then
-			local a, b, c, _, e = GetTalentTabInfo(tab)
-			if e ~= nil then
-				-- id, name, description, icon, pointsSpent
-				return b, e
-			end
-			-- name, icon, pointsSpent
-			return a, c
+		local a, b, c, _, e = GetTalentTabInfo(tab)
+		if e ~= nil then
+			-- id, name, description, icon, pointsSpent
+			return b, e
 		end
-		if C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo then
-			-- id, name, description, icon, role, primaryStat, pointsSpent, ...
-			local _, name, _, _, _, _, pointsSpent = C_SpecializationInfo.GetSpecializationInfo(tab)
-			return name, pointsSpent
-		end
+		-- name, icon, pointsSpent
+		return a, c
 	end
 
 	-- Returns the current rank of a talent, or 0 if unknown.
 	local function AutoGearGetTalentRank(tab, index)
-		local rank
-		if GetTalentInfo then
-			rank = select(5, GetTalentInfo(tab, index))
-		elseif C_SpecializationInfo and C_SpecializationInfo.GetTalentInfo then
-			local info = C_SpecializationInfo.GetTalentInfo({specializationIndex = tab, talentIndex = index})
-			rank = info and info.rank
-		end
+		local rank = GetTalentInfo and select(5, GetTalentInfo(tab, index))
 		return tonumber(rank) or 0
 	end
 
@@ -316,7 +303,6 @@ if TOC_VERSION_CURRENT < TOC_VERSION_MOP then
 		local highestPointsSpent = nil
 		local numTalentTabs = GetNumTalentTabs and GetNumTalentTabs()
 		if (not numTalentTabs) or (numTalentTabs < 2) then
-			AutoGearPrint("AutoGear: numTalentTabs in AutoGearGetSpec() is "..tostring(numTalentTabs),3)
 			-- fall back to probing tabs until one doesn't exist
 			numTalentTabs = 4
 		end
@@ -362,9 +348,15 @@ else
 		local currentSpecName = currentSpec and select(2, GetSpecializationInfo(currentSpec)) or "None"
 		if (currentSpec == 5) then
 			return "None"
-		else
-			return currentSpecName
 		end
+		-- Pre-MoP clients with the specialization API report class-wide specs (e.g. "Rogue") that have no weights.
+		if TOC_VERSION_CURRENT < TOC_VERSION_MOP then
+			local classWeights = AutoGearDefaultWeights and AutoGearDefaultWeights[select(2, UnitClass("player"))]
+			if classWeights and not classWeights[currentSpecName] then
+				return "None"
+			end
+		end
+		return currentSpecName
 	end
 end
 

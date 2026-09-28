@@ -278,37 +278,59 @@ end
 -- Specializations appeared only in Mists Of Pandaria. We also have make changes to Cataclysm with preferred talent tree
 -- later
 if TOC_VERSION_CURRENT < TOC_VERSION_MOP then
+	-- Returns the name and points spent of a talent tab, or nil if it doesn't exist.
+	-- Newer Classic clients removed GetTalentTabInfo in favor of C_SpecializationInfo.GetSpecializationInfo.
+	local function AutoGearGetTalentTabInfo(tab)
+		if GetTalentTabInfo then
+			local a, b, c, _, e = GetTalentTabInfo(tab)
+			if e ~= nil then
+				-- id, name, description, icon, pointsSpent
+				return b, e
+			end
+			-- name, icon, pointsSpent
+			return a, c
+		end
+		if C_SpecializationInfo and C_SpecializationInfo.GetSpecializationInfo then
+			-- id, name, description, icon, role, primaryStat, pointsSpent, ...
+			local _, name, _, _, _, _, pointsSpent = C_SpecializationInfo.GetSpecializationInfo(tab)
+			return name, pointsSpent
+		end
+	end
+
+	-- Returns the current rank of a talent, or 0 if unknown.
+	local function AutoGearGetTalentRank(tab, index)
+		local rank
+		if GetTalentInfo then
+			rank = select(5, GetTalentInfo(tab, index))
+		elseif C_SpecializationInfo and C_SpecializationInfo.GetTalentInfo then
+			local info = C_SpecializationInfo.GetTalentInfo({specializationIndex = tab, talentIndex = index})
+			rank = info and info.rank
+		end
+		return tonumber(rank) or 0
+	end
+
 	function AutoGearDetectSpec()
 		-- GetSpecialization() doesn't exist until MoP
 		-- Instead, this finds the talent tree where the most points are allocated.
 		local highestSpec = nil
 		local highestPointsSpent = nil
-		local numTalentTabs = GetNumTalentTabs()
+		local numTalentTabs = GetNumTalentTabs and GetNumTalentTabs()
 		if (not numTalentTabs) or (numTalentTabs < 2) then
 			AutoGearPrint("AutoGear: numTalentTabs in AutoGearGetSpec() is "..tostring(numTalentTabs),0)
+			-- fall back to probing tabs until one doesn't exist
+			numTalentTabs = 4
 		end
-		-- It needs a condition of being above 0 or else it will assign highestSpec to the first talent tree even if there are 0 points in it.
-		local _, spec, _, _, pointsSpent = GetTalentTabInfo(1)
-		if pointsSpent and pointsSpent >= 0 then
-			highestPointsSpent = pointsSpent
-			if pointsSpent > 0 then highestSpec = spec end
-			for i = 2, numTalentTabs do
-				local _, spec, _, _, pointsSpent = GetTalentTabInfo(i)
-				if (pointsSpent > highestPointsSpent) then
-					highestPointsSpent = pointsSpent
-					highestSpec = spec
-				end
-			end
-		else
-			for i = 1, numTalentTabs do
-				local spec, _, pointsSpent = GetTalentTabInfo(i)
-				if (highestPointsSpent == nil or pointsSpent > highestPointsSpent) then
-					highestPointsSpent = pointsSpent
-					highestSpec = spec
-				end
+		for i = 1, numTalentTabs do
+			local spec, pointsSpent = AutoGearGetTalentTabInfo(i)
+			if not spec then break end
+			pointsSpent = tonumber(pointsSpent) or 0
+			-- Require points above 0 so an empty first tree isn't picked as the spec.
+			if highestPointsSpent == nil or pointsSpent > highestPointsSpent then
+				highestPointsSpent = pointsSpent
+				if pointsSpent > 0 then highestSpec = spec end
 			end
 		end
-		if (highestPointsSpent == 0) then
+		if (not highestSpec) then
 			return "None"
 		end
 
@@ -316,18 +338,18 @@ if TOC_VERSION_CURRENT < TOC_VERSION_MOP then
 		if (highestSpec == "Feral" or highestSpec == "Feral Combat") then
 			local tankiness = 0
 			if TOC_VERSION_CURRENT < TOC_VERSION_WOTLK then
-				tankiness = tankiness + select(5, GetTalentInfo(2, 3)) * 1.0 --Feral Instinct
-				tankiness = tankiness + select(5, GetTalentInfo(2, 7)) * 5 --Feral Charge
-				tankiness = tankiness + select(5, GetTalentInfo(2, 5)) * 0.5 --Thick Hide
-				tankiness = tankiness + select(5, GetTalentInfo(2, 9)) * -100 --Improved Shred
-				tankiness = tankiness + select(5, GetTalentInfo(2, 12)) * 100 --Primal Fury
+				tankiness = tankiness + AutoGearGetTalentRank(2, 3) * 1.0 --Feral Instinct
+				tankiness = tankiness + AutoGearGetTalentRank(2, 7) * 5 --Feral Charge
+				tankiness = tankiness + AutoGearGetTalentRank(2, 5) * 0.5 --Thick Hide
+				tankiness = tankiness + AutoGearGetTalentRank(2, 9) * -100 --Improved Shred
+				tankiness = tankiness + AutoGearGetTalentRank(2, 12) * 100 --Primal Fury
 			else
-				tankiness = tankiness + select(5, GetTalentInfo(2, 15)) * 3 --Survival Instincts
-				tankiness = tankiness + select(5, GetTalentInfo(2, 10)) * 1 --Feral Charge
-				tankiness = tankiness + select(5, GetTalentInfo(2, 22)) * 1 --Primal Precision
-				tankiness = tankiness + select(5, GetTalentInfo(2, 1)) * 1 --Thick Hide
-				tankiness = tankiness + select(5, GetTalentInfo(2, 19)) * -100 --Predatory Instincts
-				tankiness = tankiness + select(5, GetTalentInfo(2, 28)) * 100 --Protector of the Pack
+				tankiness = tankiness + AutoGearGetTalentRank(2, 15) * 3 --Survival Instincts
+				tankiness = tankiness + AutoGearGetTalentRank(2, 10) * 1 --Feral Charge
+				tankiness = tankiness + AutoGearGetTalentRank(2, 22) * 1 --Primal Precision
+				tankiness = tankiness + AutoGearGetTalentRank(2, 1) * 1 --Thick Hide
+				tankiness = tankiness + AutoGearGetTalentRank(2, 19) * -100 --Predatory Instincts
+				tankiness = tankiness + AutoGearGetTalentRank(2, 28) * 100 --Protector of the Pack
 			end
 			if (tankiness >= 5) then return "Guardian" end
 		end
